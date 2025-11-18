@@ -1,0 +1,156 @@
+Project: Digital Resume Builder (Modern stack)
+Short: Full-stack web app to collect structured resume data and export ATS-friendly PDF and DOCX. Deployed to production with Postgres DB, authentication, and CI/CD.
+
+Tech stack (must use):
+- Frontend: React + Vite, TypeScript, Tailwind CSS
+- Backend: Node.js (18+) + Express, TypeScript
+- DB: PostgreSQL (use Prisma ORM)
+- Auth: JWT (access + refresh) + bcrypt for password hashing
+- File export:
+  - Server-side: Puppeteer (render resume template HTML -> PDF)
+  - DOCX: use 'docx' npm package (or server-side docx generation)
+- Storage: Postgres for data; no file blobs required (PDF generated on-demand)
+- Devtools: ESLint, Prettier, Husky pre-commit hooks, GitHub Actions
+- Containerization: Dockerfile for backend & docker-compose for local dev (optional)
+- Deployment: Frontend -> Vercel; Backend -> Render or Railway; DB -> Supabase or Railway Postgres
+- Testing: Jest + Supertest for backend; vitest for frontend
+- Logging/Monitoring: Winston (backend) + Sentry integration stub
+- Optional: Redis for refresh-token/session store (use later if needed)
+
+Repository structure (exact):
+/README.md
+/.github/workflows/ci.yml
+/frontend/
+  /src/
+    /components/
+    /pages/
+    /templates/
+    /utils/
+    /api/ (client wrappers)
+  index.html
+  package.json
+  tsconfig.json
+  tailwind.config.cjs
+/backend/
+  /src/
+    /controllers/
+    /routes/
+    /services/
+    /prisma/
+    /templates/   <-- html templates for resume
+    /utils/
+    /tests/
+  package.json
+  tsconfig.json
+  prisma/
+    schema.prisma
+  Dockerfile
+  .env.example
+
+Features & requirements (MUST implement):
+1. Full resume form (repeatable sections): personal, summary, education, work experience (company, role, start/end, bullets), projects, skills (tags), certifications, languages.
+2. Live HTML preview on frontend; template preview switcher (two templates).
+3. Save drafts per authenticated user; load & edit existing resumes.
+4. Export endpoints:
+   - POST /api/resumes/:id/export?format=pdf -> returns PDF (server generates with Puppeteer)
+   - POST /api/resumes/:id/export?format=docx -> returns DOCX
+5. Simple ATS-check module: given job title or upload job-description text, return top 10 recommended keywords and simple ATS score.
+6. Auth:
+   - POST /api/auth/register, /login, /refresh, /logout
+   - Protected resume CRUD: create/read/update/delete
+7. Validation (zod or express-validator) for inputs.
+8. Prisma migrations and a seed script that creates one sample user and 3 sample resumes.
+9. Security: rate-limiter middleware, helmet, CORS config, input sanitization.
+10. Error handling: centralized error handler; 5xx/4xx JSON responses with codes.
+11. Unit + integration tests for critical routes (auth, resume CRUD, export).
+12. CI: GitHub Actions to run lint, tests, and (on main) push Docker image or deploy steps.
+13. README: setup steps, environment variables, run commands, deploy instructions, sample curl requests.
+14. ENV variables to include in .env.example:
+    - DATABASE_URL
+    - JWT_SECRET
+    - JWT_REFRESH_SECRET
+    - NODE_ENV
+    - PORT
+    - REDIS_URL (optional)
+    - SENTRY_DSN (optional)
+    - BASE_URL (frontend)
+15. Dockerfile and docker-compose.dev.yaml for local development linking frontend, backend, postgres.
+16. Access logs & error logs to console + file (winston).
+17. Rate-limited export route to avoid abuse.
+
+API endpoints (spec):
+- POST /api/auth/register {name,email,password}
+- POST /api/auth/login {email,password} => {accessToken,refreshToken}
+- POST /api/auth/refresh {refreshToken} => {accessToken}
+- POST /api/auth/logout
+- GET /api/resumes (auth) => list
+- POST /api/resumes (auth) => create
+- GET /api/resumes/:id (auth) => resume json
+- PUT /api/resumes/:id (auth) => update
+- DELETE /api/resumes/:id (auth) => delete
+- POST /api/resumes/:id/export?format=pdf|docx (auth) => file stream
+- POST /api/ats/keywords {jobTitle|jobDescription} => top keywords
+
+Resume DB schema (Prisma simplified):
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  resumes   Resume[]
+  createdAt DateTime @default(now())
+}
+model Resume {
+  id         String   @id @default(cuid())
+  userId     String
+  title      String
+  data       Json
+  template   String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id])
+}
+
+Frontend details:
+- Use Vite + React + TypeScript
+- Components: FormBuilder (handles repeatable fields), Preview (renders template HTML from JSON), TemplateSwitcher, ExportButtons (calls backend export), Auth pages, Dashboard (list of resumes)
+- Use axios instance with JWT interceptor for access token refresh.
+- Preserve resume state in localStorage and sync to backend on save.
+- Styling: Tailwind + utility classes. Templates in /templates should be minimalist—no fancy CSS that breaks ATS (no images inside header).
+
+Deployment steps (high-level):
+1. GitHub repo push (main & dev branches).
+2. Create Supabase/Railway Postgres instance. Copy DATABASE_URL.
+3. On Render/Railway, create new service for backend from GitHub repo:
+   - Set env vars (DATABASE_URL, JWT secrets, BASE_URL).
+   - Add build command: `pnpm --filter backend build` or `cd backend && npm ci && npm run build`
+   - Start command: `node dist/index.js` (or use pm2)
+4. Deploy frontend to Vercel (connect repo, set build: `cd frontend && npm run build`, publish dir `frontend/dist`).
+5. Configure CORS to allow Vercel frontend origin.
+6. Add GitHub Actions to run tests and deploy preview on PRs.
+7. Set up domain and HTTPS (Vercel + Render have automatic TLS).
+
+Local dev quick commands:
+- `git clone <repo>`
+- `cp backend/.env.example backend/.env` (fill values)
+- `cp frontend/.env.example frontend/.env` (fill values)
+- `cd backend && npm install && npx prisma migrate dev --name init && npm run seed`
+- `cd frontend && npm install && npm run dev`
+- `docker-compose -f docker-compose.dev.yaml up --build` (if using docker-compose)
+
+Deliverable checklist:
+- Working frontend (dev mode and production build)
+- Working backend with Postgres and export endpoints
+- CI pipeline and tests passing
+- Seed data and sample resume PDF/DOCX
+- README with deploy and run instructions
+- GitHub repo link
+
+Extra notes for speed & stability (do these now):
+- Use TypeScript everywhere to reduce runtime bugs.
+- Use Prisma schema + migrations (prisma migrate) to avoid DB mismatches.
+- Use server-side Puppeteer in a separate worker/microservice if exports block requests (recommended for scale).
+- Limit Puppeteer concurrency (queue) to avoid memory spikes.
+- Keep templates simple to pass ATS — test with a few ATS parsers (online) before final submission.
+
+End of prompt.
