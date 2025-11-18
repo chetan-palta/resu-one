@@ -22,6 +22,14 @@ export const resumes = pgTable("resumes", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const refreshTokens = pgTable("refresh_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const usersRelations = relations(users, ({ many }) => ({
   resumes: many(resumes),
 }));
@@ -29,6 +37,13 @@ export const usersRelations = relations(users, ({ many }) => ({
 export const resumesRelations = relations(resumes, ({ one }) => ({
   user: one(users, {
     fields: [resumes.userId],
+    references: [users.id],
+  }),
+}));
+
+export const refreshTokensRelations = relations(refreshTokens, ({ one }) => ({
+  user: one(users, {
+    fields: [refreshTokens.userId],
     references: [users.id],
   }),
 }));

@@ -44,26 +44,26 @@ export function Header({ user, onLogout }: HeaderProps) {
 
           <nav className="hidden md:flex items-center gap-6">
             <Link href="/dashboard" data-testid="link-dashboard">
-              <a
-                className={`text-sm font-medium transition-colors hover-elevate px-3 py-2 rounded-md ${
+              <span
+                className={`text-sm font-medium transition-colors hover-elevate px-3 py-2 rounded-md cursor-pointer ${
                   location === "/dashboard"
                     ? "text-foreground"
                     : "text-muted-foreground"
                 }`}
               >
                 Dashboard
-              </a>
+              </span>
             </Link>
             <Link href="/builder/new" data-testid="link-new-resume">
-              <a
-                className={`text-sm font-medium transition-colors hover-elevate px-3 py-2 rounded-md ${
+              <span
+                className={`text-sm font-medium transition-colors hover-elevate px-3 py-2 rounded-md cursor-pointer ${
                   location.startsWith("/builder")
                     ? "text-foreground"
                     : "text-muted-foreground"
                 }`}
               >
                 New Resume
-              </a>
+              </span>
             </Link>
           </nav>
         </div>
@@ -90,12 +90,12 @@ export function Header({ user, onLogout }: HeaderProps) {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href="/dashboard" data-testid="menu-dashboard">
-                <a className="flex items-center w-full cursor-pointer">
+            <DropdownMenuItem asChild data-testid="menu-dashboard">
+              <Link href="/dashboard">
+                <span className="flex items-center w-full cursor-pointer">
                   <User className="mr-2 h-4 w-4" />
                   <span>Dashboard</span>
-                </a>
+                </span>
               </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />

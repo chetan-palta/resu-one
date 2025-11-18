@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { login } from "@/lib/api";
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -19,20 +20,16 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      // TODO: API call will be implemented in Phase 2
+      await login({ email, password });
       toast({
-        title: "Login",
-        description: "Authentication will be implemented in Phase 2",
+        title: "Success",
+        description: "Logged in successfully",
       });
-      
-      // Temporary navigation for UI testing
-      setTimeout(() => {
-        setLocation("/dashboard");
-      }, 1000);
+      setLocation("/dashboard");
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to log in. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to log in",
         variant: "destructive",
       });
     } finally {

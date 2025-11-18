@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { register } from "@/lib/api";
 
 export default function Register() {
   const [, setLocation] = useLocation();
@@ -20,19 +21,16 @@ export default function Register() {
     setIsLoading(true);
 
     try {
-      // TODO: API call will be implemented in Phase 2
+      await register({ name, email, password });
       toast({
-        title: "Account created",
-        description: "Registration will be implemented in Phase 2",
+        title: "Success",
+        description: "Account created successfully",
       });
-      
-      setTimeout(() => {
-        setLocation("/dashboard");
-      }, 1000);
+      setLocation("/dashboard");
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to create account. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to create account",
         variant: "destructive",
       });
     } finally {

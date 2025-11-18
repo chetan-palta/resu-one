@@ -17,19 +17,31 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { Resume } from "@shared/schema";
+import { authenticatedFetch, getCurrentUser, logout, clearTokens } from "@/lib/api";
+import { queryClient } from "@/lib/queryClient";
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  // Temporary mock user (will be replaced with auth in Phase 2)
-  const user = { name: "John Doe", email: "john@example.com" };
+  const user = getCurrentUser();
 
-  // Temporary mock data (will be replaced with real API in Phase 2)
   const { data: resumes = [], isLoading } = useQuery<Resume[]>({
     queryKey: ["/api/resumes"],
-    enabled: false, // Disabled until API is ready
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await authenticatedFetch(`/api/resumes/${id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error("Failed to delete resume");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/resumes"] });
+    },
   });
 
   const handleEdit = (id: string) => {
@@ -40,16 +52,16 @@ export default function Dashboard() {
     if (!deleteId) return;
     
     try {
-      // TODO: API call in Phase 2
+      await deleteMutation.mutateAsync(deleteId);
       toast({
-        title: "Resume deleted",
-        description: "Your resume has been deleted successfully.",
+        title: "Success",
+        description: "Resume deleted successfully",
       });
       setDeleteId(null);
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to delete resume. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to delete resume",
         variant: "destructive",
       });
     }
@@ -57,7 +69,13 @@ export default function Dashboard() {
 
   const handleExport = async (id: string, format: "pdf" | "docx") => {
     try {
-      // TODO: API call in Phase 2
+      const response = await authenticatedFetch(`/api/resumes/${id}/export`, {
+        method: "POST",
+        body: JSON.stringify({ format }),
+      });
+
+      if (!response.ok) throw new Error("Export failed");
+
       toast({
         title: "Export started",
         description: `Exporting resume as ${format.toUpperCase()}...`,
@@ -65,13 +83,14 @@ export default function Dashboard() {
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to export resume. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to export resume",
         variant: "destructive",
       });
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await logout();
     setLocation("/login");
   };
 
