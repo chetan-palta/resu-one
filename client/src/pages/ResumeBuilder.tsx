@@ -17,6 +17,8 @@ import { FormBuilder } from "@/components/FormBuilder";
 import { ClassicTemplate } from "@/components/templates/ClassicTemplate";
 import { ModernTemplate } from "@/components/templates/ModernTemplate";
 import { MinimalTemplate } from "@/components/templates/MinimalTemplate";
+import { ATSSimpleTemplate } from "@/components/templates/ATSSimpleTemplate";
+import { ATSCleanTemplate } from "@/components/templates/ATSCleanTemplate";
 import type { Resume, ResumeData } from "@shared/schema";
 import { authenticatedFetch } from "@/lib/api";
 
@@ -51,7 +53,7 @@ export default function ResumeBuilder() {
 
   const [resumeData, setResumeData] = useState<ResumeData>(initialData);
   const [resumeTitle, setResumeTitle] = useState("Untitled Resume");
-  const [template, setTemplate] = useState<"classic" | "modern" | "minimal">("classic");
+  const [template, setTemplate] = useState<"classic" | "modern" | "minimal" | "ats-simple" | "ats-clean">("classic");
   const [font, setFont] = useState("sans");
   const [isSaving, setIsSaving] = useState(false);
 
@@ -60,7 +62,7 @@ export default function ResumeBuilder() {
     if (resume && !isSaving) {
       setResumeData(resume.data);
       setResumeTitle(resume.title);
-      setTemplate(resume.template as "classic" | "modern" | "minimal" || "classic");
+      setTemplate(resume.template as "classic" | "modern" | "minimal" | "ats-simple" | "ats-clean" || "classic");
       setFont(resume.font || "sans");
     }
   }, [resume, isSaving]);
@@ -271,6 +273,8 @@ export default function ResumeBuilder() {
               <SelectItem value="classic">Classic</SelectItem>
               <SelectItem value="modern">Modern</SelectItem>
               <SelectItem value="minimal">Minimal (One Page)</SelectItem>
+              <SelectItem value="ats-simple">ATS Simple Professional</SelectItem>
+              <SelectItem value="ats-clean">ATS Clean Chronological</SelectItem>
             </SelectContent>
           </Select>
 
@@ -317,6 +321,8 @@ export default function ResumeBuilder() {
             {template === "classic" && <ClassicTemplate data={resumeData} />}
             {template === "modern" && <ModernTemplate data={resumeData} />}
             {template === "minimal" && <MinimalTemplate data={resumeData} font={font} />}
+            {template === "ats-simple" && <ATSSimpleTemplate data={resumeData} />}
+            {template === "ats-clean" && <ATSCleanTemplate data={resumeData} />}
           </div>
         </div>
       </div>

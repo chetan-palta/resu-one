@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
 
 export default function LandingHeader() {
     const [isScrolled, setIsScrolled] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [_, setLocation] = useLocation();
 
     useEffect(() => {
         const handleScroll = () => {
@@ -30,16 +31,19 @@ export default function LandingHeader() {
                     <a href="#features" className="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors">Features</a>
                     <a href="#how-it-works" className="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors">How it Works</a>
                     <a href="#testimonials" className="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors">Testimonials</a>
-                    <Link href="/login">
-                        <Button variant="ghost" className="text-slate-600 hover:text-indigo-600 hover:bg-indigo-50">
-                            Sign In
-                        </Button>
-                    </Link>
-                    <Link href="/register">
-                        <Button className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200">
-                            Get Started
-                        </Button>
-                    </Link>
+                    <Button
+                        variant="ghost"
+                        className="text-slate-600 hover:text-indigo-600 hover:bg-indigo-50"
+                        onClick={() => setLocation("/login")}
+                    >
+                        Sign In
+                    </Button>
+                    <Button
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200"
+                        onClick={() => setLocation("/register")}
+                    >
+                        Get Started
+                    </Button>
                 </nav>
 
                 {/* Mobile Menu Button */}
@@ -78,12 +82,8 @@ export default function LandingHeader() {
                         Testimonials
                     </a>
                     <div className="pt-4 flex flex-col gap-3">
-                        <Link href="/login">
-                            <Button variant="outline" className="w-full justify-center">Sign In</Button>
-                        </Link>
-                        <Link href="/register">
-                            <Button className="w-full justify-center bg-indigo-600 hover:bg-indigo-700">Get Started</Button>
-                        </Link>
+                        <Button variant="outline" className="w-full justify-center" onClick={() => setLocation("/login")}>Sign In</Button>
+                        <Button className="w-full justify-center bg-indigo-600 hover:bg-indigo-700" onClick={() => setLocation("/register")}>Get Started</Button>
                     </div>
                 </div>
             )}

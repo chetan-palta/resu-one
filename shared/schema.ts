@@ -13,7 +13,7 @@ export const insertResumeSchema = z.object({
   userId: z.string(),
   title: z.string(),
   data: z.any(),
-  template: z.string().optional(),
+  template: z.enum(["classic", "modern", "minimal", "ats-simple", "ats-clean"]).optional(),
   font: z.string().optional(),
 });
 
