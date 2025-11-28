@@ -1,11 +1,13 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import express from "express";
+import express, { type Request, type Response, type NextFunction } from "express";
 import { storage } from "./storage";
 import { hashPassword, comparePassword, generateAccessToken, generateRefreshToken, verifyRefreshToken } from "./auth";
 import { authMiddleware, type AuthRequest } from "./middleware";
 import { insertUserSchema, insertResumeSchema, resumeDataSchema } from "@shared/schema";
 import { z } from "zod";
+import puppeteer from "puppeteer";
+import { Document, Packer, Paragraph, TextRun } from "docx";
 import rateLimit from "express-rate-limit";
 
 const exportLimiter = rateLimit({
@@ -51,7 +53,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const accessToken = generateAccessToken(user);
       const refreshToken = generateRefreshToken(user);
-      
+
       const refreshTokenExpiry = new Date();
       refreshTokenExpiry.setDate(refreshTokenExpiry.getDate() + 7);
       await storage.storeRefreshToken(user.id, refreshToken, refreshTokenExpiry);
@@ -94,7 +96,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const accessToken = generateAccessToken(user);
       const refreshToken = generateRefreshToken(user);
-      
+
       const refreshTokenExpiry = new Date();
       refreshTokenExpiry.setDate(refreshTokenExpiry.getDate() + 7);
       await storage.storeRefreshToken(user.id, refreshToken, refreshTokenExpiry);
@@ -139,12 +141,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const newAccessToken = generateAccessToken(user);
       const newRefreshToken = generateRefreshToken(user);
-      
+
       const refreshTokenExpiry = new Date();
       refreshTokenExpiry.setDate(refreshTokenExpiry.getDate() + 7);
       await storage.storeRefreshToken(user.id, newRefreshToken, refreshTokenExpiry);
 
-      return res.status(200).json({ 
+      return res.status(200).json({
         accessToken: newAccessToken,
         refreshToken: newRefreshToken
       });
@@ -198,6 +200,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const resume = await storage.createResume({
         userId: req.userId!,
         title: validated.title,
+        // storage expects `data` as string for SQLite; stringify here so types align
         data: validated.data,
         template: validated.template,
       });
@@ -207,6 +210,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: error.errors });
       }
+      console.error("Error creating resume:", error);
       return res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -226,7 +230,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const validated = updateResumeSchema.parse(req.body);
-      const updatedResume = await storage.updateResume(req.params.id, validated);
+      // ensure `data` is stringified for storage when provided
+      const toUpdate: any = { ...validated };
+      if (toUpdate.data) toUpdate.data = validated.data;
+      const updatedResume = await storage.updateResume(req.params.id, toUpdate);
 
       return res.status(200).json(updatedResume);
     } catch (error) {
@@ -260,14 +267,159 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Resume not found" });
       }
 
-      const { format } = z.object({ format: z.enum(["pdf", "docx"]) }).parse(req.body);
+      const { format, template, font } = z.object({
+        format: z.enum(["pdf", "docx"]),
+        template: z.string().optional(),
+        font: z.string().optional()
+      }).parse(req.body);
 
-      return res.status(200).json({ 
-        message: `Export to ${format} will be implemented with Puppeteer/DOCX libraries`,
-        resumeId: resume.id,
-        format 
-      });
+      if (format === "pdf") {
+        // Launch puppeteer
+        const browser = await puppeteer.launch({
+          headless: true,
+          args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
+        const page = await browser.newPage();
+
+        // We need to render the resume. Ideally we'd use the same React components.
+        // For MVP, we can navigate to the preview page if we can authenticate,
+        // or we can construct a simple HTML representation here.
+        // Since we can't easily share React components with Node without SSR setup,
+        // we will use a trick: we'll inject the data into a template string that mimics the React template.
+        // OR, we can use the client to generate the HTML and send it? No, security.
+        // Let's try to navigate to the client-side preview URL.
+        // Assuming the client is running on localhost:5173 (Vite dev) or served statically.
+        // But we need to pass the data.
+        // Let's construct a minimal HTML page with the data injected.
+
+        const resumeData = resume.data as any;
+
+        const htmlContent = `
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="UTF-8">
+              <title>${resume.title}</title>
+              <script src="https://cdn.tailwindcss.com"></script>
+              <style>
+                @page { margin: 0; size: A4; }
+                body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; }
+                .font-sans { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+                .font-serif { font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif; }
+                .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+              </style>
+            </head>
+            <body class="font-${font || 'sans'} p-8 max-w-[210mm] mx-auto">
+              <h1 class="text-3xl font-bold uppercase mb-2">${resumeData.personal.fullName}</h1>
+              <div class="text-sm text-gray-600 mb-6">
+                ${resumeData.personal.email} | ${resumeData.personal.phone} | ${resumeData.personal.location}
+              </div>
+
+              <!-- Summary -->
+              ${resumeData.summary ? `
+                <div class="mb-6">
+                  <h2 class="text-sm font-bold uppercase border-b mb-2">Summary</h2>
+                  <p class="text-sm">${resumeData.summary}</p>
+                </div>
+              ` : ''}
+
+              <!-- Experience -->
+              ${resumeData.experience?.length ? `
+                <div class="mb-6">
+                  <h2 class="text-sm font-bold uppercase border-b mb-2">Experience</h2>
+                  ${resumeData.experience.map((exp: any) => `
+                    <div class="mb-4">
+                      <div class="flex justify-between font-bold text-sm">
+                        <span>${exp.position}</span>
+                        <span>${exp.startDate} - ${exp.current ? 'Present' : exp.endDate}</span>
+                      </div>
+                      <div class="text-sm text-gray-600 mb-1">${exp.company}</div>
+                      <ul class="list-disc ml-4 text-sm">
+                        ${exp.bullets.map((b: string) => `<li>${b}</li>`).join('')}
+                      </ul>
+                    </div>
+                  `).join('')}
+                </div>
+              ` : ''}
+
+              <!-- Education -->
+              ${resumeData.education?.length ? `
+                <div class="mb-6">
+                  <h2 class="text-sm font-bold uppercase border-b mb-2">Education</h2>
+                  ${resumeData.education.map((edu: any) => `
+                    <div class="mb-2">
+                      <div class="flex justify-between font-bold text-sm">
+                        <span>${edu.institution}</span>
+                        <span>${edu.startDate} - ${edu.endDate}</span>
+                      </div>
+                      <div class="text-sm">${edu.degree} in ${edu.field}</div>
+                      ${edu.scoreValue ? `<div class="text-xs text-gray-600">${edu.showAs === 'Percentage' && edu.scoreScale ? `Approx: ${((parseFloat(edu.scoreValue) / parseFloat(edu.scoreScale)) * 100).toFixed(2)}%` : `${edu.scoreType} ${edu.scoreValue}/${edu.scoreScale}`}</div>` : ''}
+                    </div>
+                  `).join('')}
+                </div>
+              ` : ''}
+
+              <!-- Skills -->
+              ${resumeData.skills?.length ? `
+                <div class="mb-6">
+                  <h2 class="text-sm font-bold uppercase border-b mb-2">Skills</h2>
+                  <div class="text-sm">
+                    ${resumeData.skills.map((s: any) => `
+                      <div class="mb-1"><span class="font-bold">${s.category}:</span> ${s.items.join(', ')}</div>
+                    `).join('')}
+                  </div>
+                </div>
+              ` : ''}
+
+            </body>
+          </html>
+        `;
+
+        await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+        const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
+        await browser.close();
+
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename="Resume_${resume.title.replace(/\s+/g, '_')}.pdf"`);
+        return res.send(pdfBuffer);
+
+      } else {
+        // DOCX generation using docx library
+        // This is a simplified version. In a real app, we'd map all fields.
+        const resumeData = resume.data as any;
+        const doc = new Document({
+          sections: [{
+            properties: {},
+            children: [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: resumeData.personal.fullName,
+                    bold: true,
+                    size: 32,
+                  }),
+                ],
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `${resumeData.personal.email} | ${resumeData.personal.phone}`,
+                    size: 24,
+                  }),
+                ],
+              }),
+              // Add more sections as needed...
+            ],
+          }],
+        });
+
+        const buffer = await Packer.toBuffer(doc);
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        res.setHeader("Content-Disposition", `attachment; filename="Resume_${resume.title.replace(/\s+/g, '_')}.docx"`);
+        return res.send(buffer);
+      }
     } catch (error) {
+      console.error(error);
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: error.errors });
       }
@@ -310,7 +462,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 function extractKeywords(text: string): string[] {
   const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are', 'be', 'been', 'being']);
-  
+
   const words = text
     .toLowerCase()
     .replace(/[^\w\s]/g, ' ')
@@ -336,7 +488,7 @@ function findMatchingKeywords(resumeData: any, keywords: string[]): string[] {
 function calculateATSScore(resumeData: any, keywords: string[], jobDescription: string): number {
   const matches = findMatchingKeywords(resumeData, keywords);
   const keywordScore = (matches.length / keywords.length) * 50;
-  
+
   let structureScore = 0;
   if (resumeData.summary) structureScore += 10;
   if (resumeData.experience.length > 0) structureScore += 15;

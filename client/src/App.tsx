@@ -9,11 +9,12 @@ import Register from "@/pages/Register";
 import Dashboard from "@/pages/Dashboard";
 import ResumeBuilder from "@/pages/ResumeBuilder";
 import NotFound from "@/pages/not-found";
+import LandingPage from "@/LandingPage";
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Login} />
+      <Route path="/" component={LandingPage} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
       <Route path="/dashboard" component={Dashboard} />

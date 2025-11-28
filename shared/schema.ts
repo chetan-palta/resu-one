@@ -1,77 +1,58 @@
-import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, jsonb } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-import { relations } from "drizzle-orm";
 
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull(),
-  email: text("email").notNull().unique(),
-  password: text("password").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+// Lightweight shared schemas and types used by both server and client.
+// The database models are managed by Prisma (see prisma/schema.prisma).
+
+export const insertUserSchema = z.object({
+  name: z.string(),
+  email: z.string().email(),
+  password: z.string(),
 });
 
-export const resumes = pgTable("resumes", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
-  title: text("title").notNull(),
-  data: jsonb("data").notNull(),
-  template: text("template").notNull().default("classic"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-export const refreshTokens = pgTable("refresh_tokens", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
-  token: text("token").notNull().unique(),
-  expiresAt: timestamp("expires_at").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-export const usersRelations = relations(users, ({ many }) => ({
-  resumes: many(resumes),
-}));
-
-export const resumesRelations = relations(resumes, ({ one }) => ({
-  user: one(users, {
-    fields: [resumes.userId],
-    references: [users.id],
-  }),
-}));
-
-export const refreshTokensRelations = relations(refreshTokens, ({ one }) => ({
-  user: one(users, {
-    fields: [refreshTokens.userId],
-    references: [users.id],
-  }),
-}));
-
-export const insertUserSchema = createInsertSchema(users).omit({
-  id: true,
-  createdAt: true,
-});
-
-export const insertResumeSchema = createInsertSchema(resumes).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
+export const insertResumeSchema = z.object({
+  userId: z.string(),
+  title: z.string(),
+  data: z.any(),
+  template: z.string().optional(),
+  font: z.string().optional(),
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
 export type InsertResume = z.infer<typeof insertResumeSchema>;
-export type Resume = typeof resumes.$inferSelect;
+
+export type User = {
+  id: string;
+  name: string;
+  email: string;
+  password: string;
+  createdAt: string | Date;
+};
+
+export type Resume = {
+  id: string;
+  userId: string;
+  title: string;
+  data: any;
+  template: string;
+  font: string;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+};
 
 export const resumeDataSchema = z.object({
   personal: z.object({
     fullName: z.string(),
-    email: z.string().email(),
+    email: z.string().email().or(z.literal("")),
     phone: z.string(),
     location: z.string(),
     linkedin: z.string().optional(),
     website: z.string().optional(),
+    isFresher: z.boolean().optional(),
+    github: z.string().optional(),
+    leetcode: z.string().optional(),
+    twitter: z.string().optional(),
+    customLink: z.string().optional(),
+    customLinkLabel: z.string().optional(),
   }),
   summary: z.string().optional(),
   education: z.array(z.object({
@@ -81,7 +62,11 @@ export const resumeDataSchema = z.object({
     field: z.string(),
     startDate: z.string(),
     endDate: z.string(),
-    gpa: z.string().optional(),
+    gpa: z.string().optional(), // Keeping for backward compatibility
+    scoreType: z.enum(["CGPA", "Percentage", "GPA"]).optional(),
+    scoreValue: z.string().optional(),
+    scoreScale: z.string().optional(),
+    showAs: z.enum(["CGPA", "Percentage"]).optional(),
   })),
   experience: z.array(z.object({
     id: z.string(),
@@ -91,13 +76,14 @@ export const resumeDataSchema = z.object({
     endDate: z.string(),
     current: z.boolean().optional(),
     bullets: z.array(z.string()),
-  })),
+  })).optional(),
   projects: z.array(z.object({
     id: z.string(),
     name: z.string(),
     description: z.string(),
     technologies: z.array(z.string()),
     link: z.string().optional(),
+    linkLabel: z.string().optional(),
   })),
   skills: z.array(z.object({
     id: z.string(),

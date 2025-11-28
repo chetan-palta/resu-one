@@ -1,11 +1,7 @@
 import { useState, useEffect } from "react";
-import { useRoute, useLocation } from "wouter";
-import { Header } from "@/components/Header";
-import { FormBuilder } from "@/components/FormBuilder";
-import { ClassicTemplate } from "@/components/templates/ClassicTemplate";
-import { ModernTemplate } from "@/components/templates/ModernTemplate";
-import { ExportModal } from "@/components/ExportModal";
-import { ATSAnalysis } from "@/components/ATSAnalysis";
+import { useLocation, useRoute } from "wouter";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,10 +11,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Save, Download, Eye, EyeOff } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import type { ResumeData } from "@shared/schema";
+import { Card } from "@/components/ui/card";
+import { Loader2, Save, Download, ArrowLeft, Type } from "lucide-react";
+import { FormBuilder } from "@/components/FormBuilder";
+import { ClassicTemplate } from "@/components/templates/ClassicTemplate";
+import { ModernTemplate } from "@/components/templates/ModernTemplate";
+import { MinimalTemplate } from "@/components/templates/MinimalTemplate";
+import type { Resume, ResumeData } from "@shared/schema";
+import { authenticatedFetch } from "@/lib/api";
 
 const initialData: ResumeData = {
   personal: {
@@ -26,41 +26,44 @@ const initialData: ResumeData = {
     email: "",
     phone: "",
     location: "",
-    linkedin: "",
-    website: "",
+    isFresher: false,
   },
-  summary: "",
   education: [],
   experience: [],
-  projects: [],
   skills: [],
+  projects: [],
   certifications: [],
   languages: [],
 };
 
 export default function ResumeBuilder() {
-  const [, params] = useRoute("/builder/:id");
-  const [, setLocation] = useLocation();
+  const [match, params] = useRoute("/builder/:id");
+  const [location, setLocation] = useLocation();
   const { toast } = useToast();
-  
-  const [resumeTitle, setResumeTitle] = useState("Untitled Resume");
-  const [resumeData, setResumeData] = useState<ResumeData>(initialData);
-  const [template, setTemplate] = useState<"classic" | "modern">("classic");
-  const [showPreview, setShowPreview] = useState(true);
-  const [showExportModal, setShowExportModal] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-
-  // Temporary mock user (will be replaced with auth in Phase 2)
-  const user = { name: "John Doe", email: "john@example.com" };
+  const queryClient = useQueryClient();
 
   const isNewResume = params?.id === "new";
 
-  // Load resume data (Phase 3 will add real API call)
+  const { data: resume, isLoading } = useQuery<Resume>({
+    queryKey: [`/api/resumes/${params?.id}`],
+    enabled: !isNewResume,
+  });
+
+  const [resumeData, setResumeData] = useState<ResumeData>(initialData);
+  const [resumeTitle, setResumeTitle] = useState("Untitled Resume");
+  const [template, setTemplate] = useState<"classic" | "modern" | "minimal">("classic");
+  const [font, setFont] = useState("sans");
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Load initial data when resume is fetched
   useEffect(() => {
-    if (!isNewResume) {
-      // TODO: Load existing resume from API
+    if (resume && !isSaving) {
+      setResumeData(resume.data);
+      setResumeTitle(resume.title);
+      setTemplate(resume.template as "classic" | "modern" | "minimal" || "classic");
+      setFont(resume.font || "sans");
     }
-  }, [params?.id, isNewResume]);
+  }, [resume, isSaving]);
 
   // Auto-save to localStorage
   useEffect(() => {
@@ -69,29 +72,121 @@ export default function ResumeBuilder() {
         title: resumeTitle,
         data: resumeData,
         template,
+        font,
       }));
     }, 1000);
 
     return () => clearTimeout(timeoutId);
-  }, [resumeTitle, resumeData, template]);
+  }, [resumeTitle, resumeData, template, font]);
 
   const handleSave = async () => {
     setIsSaving(true);
-    
+
+    // Basic validation
+    const phoneRegex = /^(\+91[\-\s]?|0)?[6-9]\d{9}$/;
+    if (resumeData.personal.phone && !phoneRegex.test(resumeData.personal.phone.replace(/\s/g, ''))) {
+      toast({
+        title: "Invalid Phone Number",
+        description: "Please enter a valid Indian phone number.",
+        variant: "destructive",
+      });
+      setIsSaving(false);
+      return;
+    }
+
+    // Score validation
+    for (const edu of resumeData.education) {
+      if (edu.scoreType === "CGPA") {
+        const val = parseFloat(edu.scoreValue || "0");
+        const scale = parseFloat(edu.scoreScale || "10");
+        if (val < 0 || val > scale) {
+          toast({
+            title: "Invalid CGPA",
+            description: `CGPA must be between 0 and ${scale} for ${edu.institution}`,
+            variant: "destructive",
+          });
+          setIsSaving(false);
+          return;
+        }
+      } else if (edu.scoreType === "Percentage") {
+        const val = parseFloat(edu.scoreValue || "0");
+        if (val < 0 || val > 100) {
+          toast({
+            title: "Invalid Percentage",
+            description: `Percentage must be between 0 and 100 for ${edu.institution}`,
+            variant: "destructive",
+          });
+          setIsSaving(false);
+          return;
+        }
+      }
+    }
+
     try {
-      // TODO: API call will be implemented in Phase 2
+      const url = isNewResume ? "/api/resumes" : `/api/resumes/${params?.id}`;
+      const method = isNewResume ? "POST" : "PATCH";
+
+      // Normalize data before sending
+      const payload = {
+        title: resumeTitle,
+        template,
+        font,
+        data: {
+          ...resumeData,
+          personal: {
+            ...resumeData.personal,
+            // Normalize phone to +91 format if valid
+            phone: resumeData.personal.phone.replace(/^(\+91|0)?/, "+91").replace(/[\-\s]/g, '')
+          },
+          // Ensure experience is empty array if fresher (or undefined if schema allows, but let's send empty array for now to be safe with existing UI)
+          experience: resumeData.personal.isFresher ? [] : resumeData.experience
+        }
+      };
+
+      const response = await authenticatedFetch(url, {
+        method,
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error ? JSON.stringify(errorData.error) : "Failed to save resume");
+      }
+
+      const savedResume = await response.json();
+
       toast({
         title: "Resume saved",
         description: "Your changes have been saved successfully.",
       });
-      
-      setTimeout(() => {
+
+      // Redirect to dashboard or update URL if new
+      if (isNewResume) {
         setLocation("/dashboard");
-      }, 1000);
-    } catch (error) {
+      }
+    } catch (error: any) {
+      let errorMessage = "Failed to save resume. Please try again.";
+
+      try {
+        // Try to parse Zod errors if they are in the error message
+        const parsedError = JSON.parse(error.message);
+        if (Array.isArray(parsedError)) {
+          errorMessage = parsedError.map((e: any) => `${e.path.join('.')}: ${e.message}`).join('\n');
+        } else if (parsedError.message) {
+          errorMessage = parsedError.message;
+        } else if (typeof parsedError === 'string') {
+          errorMessage = parsedError;
+        }
+      } catch (e) {
+        // If not JSON, use the original message if it's not the generic one
+        if (error.message && error.message !== "Failed to save resume") {
+          errorMessage = error.message;
+        }
+      }
+
       toast({
         title: "Error",
-        description: "Failed to save resume. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -101,13 +196,39 @@ export default function ResumeBuilder() {
 
   const handleExport = async (format: "pdf" | "docx") => {
     try {
-      // TODO: API call will be implemented in Phase 2
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      if (isNewResume) {
+        toast({
+          title: "Save first",
+          description: "Please save your resume before exporting.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const response = await authenticatedFetch(`/api/resumes/${params?.id}/export`, {
+        method: "POST",
+        body: JSON.stringify({ format, template, font }),
+      });
+
+      if (!response.ok) throw new Error("Export failed");
+
+      // Handle file download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Resume_${resumeData.personal.fullName.replace(/\s+/g, '_') || "Untitled"}_${params?.id}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
       toast({
         title: "Export complete",
         description: `Your resume has been exported as ${format.toUpperCase()}`,
       });
     } catch (error) {
+      console.error(error);
       toast({
         title: "Error",
         description: "Failed to export resume. Please try again.",
@@ -116,120 +237,89 @@ export default function ResumeBuilder() {
     }
   };
 
-  const handleLogout = () => {
-    setLocation("/login");
-  };
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <Header user={user} onLogout={handleLogout} />
-
-      {/* Top Toolbar */}
-      <div className="border-b bg-background sticky top-16 z-40">
-        <div className="container max-w-7xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex-1 max-w-md">
-              <Input
-                value={resumeTitle}
-                onChange={(e) => setResumeTitle(e.target.value)}
-                placeholder="Resume Title"
-                className="font-semibold"
-                data-testid="input-resume-title"
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowPreview(!showPreview)}
-                className="hidden lg:flex"
-                data-testid="button-toggle-preview"
-              >
-                {showPreview ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
-                {showPreview ? "Hide" : "Show"} Preview
-              </Button>
-
-              <Select value={template} onValueChange={(v) => setTemplate(v as "classic" | "modern")}>
-                <SelectTrigger className="w-40" data-testid="select-template">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="classic" data-testid="option-template-classic">Classic</SelectItem>
-                  <SelectItem value="modern" data-testid="option-template-modern">Modern</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowExportModal(true)}
-                data-testid="button-export"
-              >
-                <Download className="mr-2 h-4 w-4" />
-                Export
-              </Button>
-
-              <Button
-                size="sm"
-                onClick={handleSave}
-                disabled={isSaving}
-                data-testid="button-save"
-              >
-                <Save className="mr-2 h-4 w-4" />
-                {isSaving ? "Saving..." : "Save"}
-              </Button>
-            </div>
+      {/* Header */}
+      <header className="border-b bg-card px-6 py-3 flex items-center justify-between sticky top-0 z-10">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => setLocation("/dashboard")}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div className="flex items-center gap-2">
+            <Input
+              value={resumeTitle}
+              onChange={(e) => setResumeTitle(e.target.value)}
+              className="w-64 font-medium"
+              placeholder="Resume Title"
+            />
           </div>
         </div>
-      </div>
+        <div className="flex items-center gap-2">
+          <Select value={template} onValueChange={(v) => setTemplate(v as any)}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Select Template" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="classic">Classic</SelectItem>
+              <SelectItem value="modern">Modern</SelectItem>
+              <SelectItem value="minimal">Minimal (One Page)</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={font} onValueChange={setFont}>
+            <SelectTrigger className="w-[140px]">
+              <Type className="w-4 h-4 mr-2" />
+              <SelectValue placeholder="Font" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="sans">Sans Serif</SelectItem>
+              <SelectItem value="serif">Serif</SelectItem>
+              <SelectItem value="mono">Monospace</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Button variant="outline" onClick={() => handleSave()} disabled={isSaving}>
+            <Save className="h-4 w-4 mr-2" />
+            Save
+          </Button>
+
+          <div className="flex gap-1">
+            <Button variant="default" onClick={() => handleExport("pdf")}>
+              <Download className="h-4 w-4 mr-2" />
+              PDF
+            </Button>
+            <Button variant="secondary" onClick={() => handleExport("docx")}>
+              <Download className="h-4 w-4 mr-2" />
+              DOCX
+            </Button>
+          </div>
+        </div>
+      </header>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-hidden">
-        <div className="h-full container max-w-7xl mx-auto px-4 py-6">
-          <div className="grid lg:grid-cols-[1fr,600px] gap-6 h-full">
-            {/* Left Panel - Form */}
-            <div className="h-full overflow-hidden">
-              <FormBuilder data={resumeData} onChange={setResumeData} />
-            </div>
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Panel - Form */}
+        <div className="w-1/2 border-r bg-muted/10 overflow-y-auto p-6">
+          <FormBuilder data={resumeData} onChange={setResumeData} />
+        </div>
 
-            {/* Right Panel - Preview & ATS */}
-            {showPreview && (
-              <div className="hidden lg:block h-full overflow-y-auto" data-testid="panel-preview">
-                <Tabs defaultValue="preview" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2 mb-4">
-                    <TabsTrigger value="preview" data-testid="tab-preview">Preview</TabsTrigger>
-                    <TabsTrigger value="ats" data-testid="tab-ats">ATS Analysis</TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="preview" className="mt-0" data-testid="content-preview">
-                    <div className="bg-muted/30 p-6 rounded-lg">
-                      <div className="bg-white shadow-lg mx-auto" style={{ width: "8.5in", transform: "scale(0.7)", transformOrigin: "top center" }} data-testid="resume-preview">
-                        {template === "classic" ? (
-                          <ClassicTemplate data={resumeData} />
-                        ) : (
-                          <ModernTemplate data={resumeData} />
-                        )}
-                      </div>
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="ats" className="mt-0" data-testid="content-ats">
-                    <ATSAnalysis resumeData={resumeData} />
-                  </TabsContent>
-                </Tabs>
-              </div>
-            )}
+        {/* Right Panel - Preview */}
+        <div className="w-1/2 bg-muted/30 overflow-y-auto p-8">
+          <div className="max-w-[210mm] mx-auto shadow-lg min-h-[297mm] bg-white origin-top transform scale-90">
+            {template === "classic" && <ClassicTemplate data={resumeData} />}
+            {template === "modern" && <ModernTemplate data={resumeData} />}
+            {template === "minimal" && <MinimalTemplate data={resumeData} font={font} />}
           </div>
         </div>
       </div>
-
-      <ExportModal
-        open={showExportModal}
-        onOpenChange={setShowExportModal}
-        resumeId={params?.id || "new"}
-        onExport={handleExport}
-      />
     </div>
   );
 }

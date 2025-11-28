@@ -10,8 +10,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Info } from "lucide-react";
+import { SkillsSuggester } from "./SkillsSuggester";
 import type { ResumeData } from "@shared/schema";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface FormBuilderProps {
   data: ResumeData;
@@ -21,7 +30,7 @@ interface FormBuilderProps {
 export function FormBuilder({ data, onChange }: FormBuilderProps) {
   const [openSection, setOpenSection] = useState<string>("personal");
 
-  const updatePersonal = (field: string, value: string) => {
+  const updatePersonal = (field: string, value: string | boolean) => {
     onChange({
       ...data,
       personal: { ...data.personal, [field]: value },
@@ -66,7 +75,7 @@ export function FormBuilder({ data, onChange }: FormBuilderProps) {
     onChange({
       ...data,
       experience: [
-        ...data.experience,
+        ...(data.experience || []),
         {
           id: crypto.randomUUID(),
           company: "",
@@ -83,50 +92,50 @@ export function FormBuilder({ data, onChange }: FormBuilderProps) {
   const updateExperience = (id: string, field: string, value: any) => {
     onChange({
       ...data,
-      experience: data.experience.map((exp) =>
+      experience: data.experience?.map((exp) =>
         exp.id === id ? { ...exp, [field]: value } : exp
-      ),
+      ) || [],
     });
   };
 
   const removeExperience = (id: string) => {
     onChange({
       ...data,
-      experience: data.experience.filter((exp) => exp.id !== id),
+      experience: data.experience?.filter((exp) => exp.id !== id) || [],
     });
   };
 
   const addBullet = (expId: string) => {
     onChange({
       ...data,
-      experience: data.experience.map((exp) =>
+      experience: data.experience?.map((exp) =>
         exp.id === expId ? { ...exp, bullets: [...exp.bullets, ""] } : exp
-      ),
+      ) || [],
     });
   };
 
   const updateBullet = (expId: string, index: number, value: string) => {
     onChange({
       ...data,
-      experience: data.experience.map((exp) =>
+      experience: data.experience?.map((exp) =>
         exp.id === expId
           ? {
-              ...exp,
-              bullets: exp.bullets.map((b, i) => (i === index ? value : b)),
-            }
+            ...exp,
+            bullets: exp.bullets.map((b, i) => (i === index ? value : b)),
+          }
           : exp
-      ),
+      ) || [],
     });
   };
 
   const removeBullet = (expId: string, index: number) => {
     onChange({
       ...data,
-      experience: data.experience.map((exp) =>
+      experience: data.experience?.map((exp) =>
         exp.id === expId
           ? { ...exp, bullets: exp.bullets.filter((_, i) => i !== index) }
           : exp
-      ),
+      ) || [],
     });
   };
 
@@ -276,7 +285,7 @@ export function FormBuilder({ data, onChange }: FormBuilderProps) {
                   id="fullName"
                   value={data.personal.fullName}
                   onChange={(e) => updatePersonal("fullName", e.target.value)}
-                  placeholder="John Doe"
+                  placeholder="Enter your name"
                   data-testid="input-fullname"
                 />
               </div>
@@ -297,7 +306,7 @@ export function FormBuilder({ data, onChange }: FormBuilderProps) {
                   id="phone"
                   value={data.personal.phone}
                   onChange={(e) => updatePersonal("phone", e.target.value)}
-                  placeholder="+1 (555) 123-4567"
+                  placeholder="Ex: +91 9123456789 or 9123456789"
                   data-testid="input-phone"
                 />
               </div>
@@ -307,9 +316,21 @@ export function FormBuilder({ data, onChange }: FormBuilderProps) {
                   id="location"
                   value={data.personal.location}
                   onChange={(e) => updatePersonal("location", e.target.value)}
-                  placeholder="New York, NY"
+                  placeholder="Chandigarh, India"
                   data-testid="input-location"
                 />
+              </div>
+              <div className="col-span-2 flex items-center space-x-2">
+                <Checkbox
+                  id="isFresher"
+                  checked={data.personal.isFresher}
+                  onCheckedChange={(checked) =>
+                    updatePersonal("isFresher", checked as boolean)
+                  }
+                />
+                <Label htmlFor="isFresher" className="font-normal cursor-pointer">
+                  Fresher / Currently a student (No work experience)
+                </Label>
               </div>
               <div>
                 <Label htmlFor="linkedin">LinkedIn</Label>
@@ -330,6 +351,56 @@ export function FormBuilder({ data, onChange }: FormBuilderProps) {
                   placeholder="johndoe.com"
                   data-testid="input-website"
                 />
+              </div>
+              <div>
+                <Label htmlFor="github">GitHub</Label>
+                <Input
+                  id="github"
+                  value={data.personal.github || ""}
+                  onChange={(e) => updatePersonal("github", e.target.value)}
+                  placeholder="github.com/johndoe"
+                  data-testid="input-github"
+                />
+              </div>
+              <div>
+                <Label htmlFor="leetcode">LeetCode</Label>
+                <Input
+                  id="leetcode"
+                  value={data.personal.leetcode || ""}
+                  onChange={(e) => updatePersonal("leetcode", e.target.value)}
+                  placeholder="leetcode.com/johndoe"
+                  data-testid="input-leetcode"
+                />
+              </div>
+              <div>
+                <Label htmlFor="twitter">Twitter / X</Label>
+                <Input
+                  id="twitter"
+                  value={data.personal.twitter || ""}
+                  onChange={(e) => updatePersonal("twitter", e.target.value)}
+                  placeholder="twitter.com/johndoe"
+                  data-testid="input-twitter"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2 col-span-2">
+                <div>
+                  <Label htmlFor="customLinkLabel">Custom Link Label</Label>
+                  <Input
+                    id="customLinkLabel"
+                    value={data.personal.customLinkLabel || ""}
+                    onChange={(e) => updatePersonal("customLinkLabel", e.target.value)}
+                    placeholder="Portfolio / Blog"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="customLink">Custom Link URL</Label>
+                  <Input
+                    id="customLink"
+                    value={data.personal.customLink || ""}
+                    onChange={(e) => updatePersonal("customLink", e.target.value)}
+                    placeholder="https://..."
+                  />
+                </div>
               </div>
             </div>
           </AccordionContent>
@@ -429,16 +500,112 @@ export function FormBuilder({ data, onChange }: FormBuilderProps) {
                         data-testid={`input-end-date-${index}`}
                       />
                     </div>
-                    <div className="col-span-2">
-                      <Label>GPA</Label>
-                      <Input
-                        value={edu.gpa || ""}
-                        onChange={(e) =>
-                          updateEducation(edu.id, "gpa", e.target.value)
-                        }
-                        placeholder="3.8/4.0"
-                        data-testid={`input-gpa-${index}`}
-                      />
+                    <div className="col-span-2 grid grid-cols-2 gap-4">
+                      <div>
+                        <Label>Score Type</Label>
+                        <Select
+                          value={edu.scoreType || ""}
+                          onValueChange={(value) =>
+                            updateEducation(edu.id, "scoreType", value)
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="CGPA">CGPA</SelectItem>
+                            <SelectItem value="Percentage">Percentage</SelectItem>
+                            <SelectItem value="GPA">GPA (Scale)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {edu.scoreType === "CGPA" && (
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label>CGPA</Label>
+                            <Input
+                              value={edu.scoreValue || ""}
+                              onChange={(e) =>
+                                updateEducation(edu.id, "scoreValue", e.target.value)
+                              }
+                              placeholder="8.5"
+                            />
+                          </div>
+                          <div>
+                            <Label>Scale</Label>
+                            <Input
+                              value={edu.scoreScale || "10"}
+                              onChange={(e) =>
+                                updateEducation(edu.id, "scoreScale", e.target.value)
+                              }
+                              placeholder="10"
+                            />
+                          </div>
+                          <div className="col-span-2 text-xs text-muted-foreground flex items-center justify-between">
+                            {edu.scoreValue && edu.scoreScale && (
+                              <span>
+                                Approx: {((parseFloat(edu.scoreValue) / parseFloat(edu.scoreScale)) * 100).toFixed(2)}%
+                              </span>
+                            )}
+                            <div className="flex items-center space-x-2">
+                              <Label className="text-xs">Show as:</Label>
+                              <Select
+                                value={edu.showAs || "Percentage"}
+                                onValueChange={(value) =>
+                                  updateEducation(edu.id, "showAs", value)
+                                }
+                              >
+                                <SelectTrigger className="h-6 w-24 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="CGPA">CGPA</SelectItem>
+                                  <SelectItem value="Percentage">Percentage</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {edu.scoreType === "Percentage" && (
+                        <div>
+                          <Label>Percentage (%)</Label>
+                          <Input
+                            value={edu.scoreValue || ""}
+                            onChange={(e) =>
+                              updateEducation(edu.id, "scoreValue", e.target.value)
+                            }
+                            placeholder="85"
+                          />
+                        </div>
+                      )}
+
+                      {edu.scoreType === "GPA" && (
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label>Value</Label>
+                            <Input
+                              value={edu.scoreValue || ""}
+                              onChange={(e) =>
+                                updateEducation(edu.id, "scoreValue", e.target.value)
+                              }
+                              placeholder="3.8"
+                            />
+                          </div>
+                          <div>
+                            <Label>Scale</Label>
+                            <Input
+                              value={edu.scoreScale || "4"}
+                              onChange={(e) =>
+                                updateEducation(edu.id, "scoreScale", e.target.value)
+                              }
+                              placeholder="4"
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -456,118 +623,120 @@ export function FormBuilder({ data, onChange }: FormBuilderProps) {
           </AccordionContent>
         </AccordionItem>
 
-        {/* Experience */}
-        <AccordionItem value="experience" className="border rounded-lg px-6">
-          <AccordionTrigger className="hover:no-underline py-4" data-testid="accordion-experience">
-            <span className="text-lg font-semibold">Work Experience</span>
-          </AccordionTrigger>
-          <AccordionContent className="space-y-4 pb-6">
-            {data.experience.map((exp, index) => (
-              <Card key={exp.id} className="p-4 relative">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute top-2 right-2 h-8 w-8"
-                  onClick={() => removeExperience(exp.id)}
-                  data-testid={`button-remove-experience-${index}`}
-                >
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-                <div className="space-y-4 pr-10">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="col-span-2">
-                      <Label>Company *</Label>
-                      <Input
-                        value={exp.company}
-                        onChange={(e) =>
-                          updateExperience(exp.id, "company", e.target.value)
-                        }
-                        placeholder="Tech Corp"
-                        data-testid={`input-company-${index}`}
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <Label>Position *</Label>
-                      <Input
-                        value={exp.position}
-                        onChange={(e) =>
-                          updateExperience(exp.id, "position", e.target.value)
-                        }
-                        placeholder="Software Engineer"
-                        data-testid={`input-position-${index}`}
-                      />
-                    </div>
-                    <div>
-                      <Label>Start Date *</Label>
-                      <Input
-                        value={exp.startDate}
-                        onChange={(e) =>
-                          updateExperience(exp.id, "startDate", e.target.value)
-                        }
-                        placeholder="Jan 2022"
-                        data-testid={`input-exp-start-${index}`}
-                      />
-                    </div>
-                    <div>
-                      <Label>End Date *</Label>
-                      <Input
-                        value={exp.endDate}
-                        onChange={(e) =>
-                          updateExperience(exp.id, "endDate", e.target.value)
-                        }
-                        placeholder="Present"
-                        disabled={exp.current}
-                        data-testid={`input-exp-end-${index}`}
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Responsibilities & Achievements</Label>
-                    {exp.bullets.map((bullet, bulletIdx) => (
-                      <div key={bulletIdx} className="flex gap-2">
+        {/* Experience - Hidden for Freshers */}
+        {!data.personal.isFresher && (
+          <AccordionItem value="experience" className="border rounded-lg px-6">
+            <AccordionTrigger className="hover:no-underline py-4" data-testid="accordion-experience">
+              <span className="text-lg font-semibold">Work Experience</span>
+            </AccordionTrigger>
+            <AccordionContent className="space-y-4 pb-6">
+              {data.experience?.map((exp, index) => (
+                <Card key={exp.id} className="p-4 relative">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute top-2 right-2 h-8 w-8"
+                    onClick={() => removeExperience(exp.id)}
+                    data-testid={`button-remove-experience-${index}`}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                  <div className="space-y-4 pr-10">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="col-span-2">
+                        <Label>Company *</Label>
                         <Input
-                          value={bullet}
+                          value={exp.company}
                           onChange={(e) =>
-                            updateBullet(exp.id, bulletIdx, e.target.value)
+                            updateExperience(exp.id, "company", e.target.value)
                           }
-                          placeholder="Describe your achievement or responsibility..."
-                          data-testid={`input-bullet-${index}-${bulletIdx}`}
+                          placeholder="Tech Corp"
+                          data-testid={`input-company-${index}`}
                         />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeBullet(exp.id, bulletIdx)}
-                          disabled={exp.bullets.length === 1}
-                          data-testid={`button-remove-bullet-${index}-${bulletIdx}`}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
                       </div>
-                    ))}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => addBullet(exp.id)}
-                      data-testid={`button-add-bullet-${index}`}
-                    >
-                      <Plus className="mr-2 h-3 w-3" />
-                      Add Bullet Point
-                    </Button>
+                      <div className="col-span-2">
+                        <Label>Position *</Label>
+                        <Input
+                          value={exp.position}
+                          onChange={(e) =>
+                            updateExperience(exp.id, "position", e.target.value)
+                          }
+                          placeholder="Software Engineer"
+                          data-testid={`input-position-${index}`}
+                        />
+                      </div>
+                      <div>
+                        <Label>Start Date *</Label>
+                        <Input
+                          value={exp.startDate}
+                          onChange={(e) =>
+                            updateExperience(exp.id, "startDate", e.target.value)
+                          }
+                          placeholder="Jan 2022"
+                          data-testid={`input-exp-start-${index}`}
+                        />
+                      </div>
+                      <div>
+                        <Label>End Date *</Label>
+                        <Input
+                          value={exp.endDate}
+                          onChange={(e) =>
+                            updateExperience(exp.id, "endDate", e.target.value)
+                          }
+                          placeholder="Present"
+                          disabled={exp.current}
+                          data-testid={`input-exp-end-${index}`}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Responsibilities & Achievements</Label>
+                      {exp.bullets.map((bullet, bulletIdx) => (
+                        <div key={bulletIdx} className="flex gap-2">
+                          <Input
+                            value={bullet}
+                            onChange={(e) =>
+                              updateBullet(exp.id, bulletIdx, e.target.value)
+                            }
+                            placeholder="Describe your achievement or responsibility..."
+                            data-testid={`input-bullet-${index}-${bulletIdx}`}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeBullet(exp.id, bulletIdx)}
+                            disabled={exp.bullets.length === 1}
+                            data-testid={`button-remove-bullet-${index}-${bulletIdx}`}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => addBullet(exp.id)}
+                        data-testid={`button-add-bullet-${index}`}
+                      >
+                        <Plus className="mr-2 h-3 w-3" />
+                        Add Bullet Point
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              </Card>
-            ))}
-            <Button
-              onClick={addExperience}
-              variant="outline"
-              className="w-full"
-              data-testid="button-add-experience"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Experience
-            </Button>
-          </AccordionContent>
-        </AccordionItem>
+                </Card>
+              ))}
+              <Button
+                onClick={addExperience}
+                variant="outline"
+                className="w-full"
+                data-testid="button-add-experience"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Experience
+              </Button>
+            </AccordionContent>
+          </AccordionItem>
+        )}
 
         {/* Projects */}
         <AccordionItem value="projects" className="border rounded-lg px-6">
@@ -625,16 +794,29 @@ export function FormBuilder({ data, onChange }: FormBuilderProps) {
                       data-testid={`input-project-tech-${index}`}
                     />
                   </div>
-                  <div>
-                    <Label>Link</Label>
-                    <Input
-                      value={project.link || ""}
-                      onChange={(e) =>
-                        updateProject(project.id, "link", e.target.value)
-                      }
-                      placeholder="https://github.com/username/project"
-                      data-testid={`input-project-link-${index}`}
-                    />
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="col-span-2">
+                      <Label>Link</Label>
+                      <Input
+                        value={project.link || ""}
+                        onChange={(e) =>
+                          updateProject(project.id, "link", e.target.value)
+                        }
+                        placeholder="https://github.com/username/project"
+                        data-testid={`input-project-link-${index}`}
+                      />
+                    </div>
+                    <div>
+                      <Label>Link Label</Label>
+                      <Input
+                        value={project.linkLabel || ""}
+                        onChange={(e) =>
+                          updateProject(project.id, "linkLabel", e.target.value)
+                        }
+                        placeholder="Repo / Live"
+                        data-testid={`input-project-link-label-${index}`}
+                      />
+                    </div>
                   </div>
                 </div>
               </Card>
@@ -684,16 +866,38 @@ export function FormBuilder({ data, onChange }: FormBuilderProps) {
                     <Label>Skills (comma-separated) *</Label>
                     <Input
                       value={skillGroup.items.join(", ")}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        // We keep the raw input for better UX while typing
                         updateSkillGroup(
                           skillGroup.id,
                           "items",
-                          e.target.value.split(",").map((s) => s.trim())
-                        )
-                      }
-                      placeholder="JavaScript, TypeScript, Python"
+                          e.target.value.split(",").map(s => s.trim())
+                        );
+                      }}
+                      onBlur={(e) => {
+                        const items = e.target.value
+                          .split(",")
+                          .map((s) => s.trim()) // Don't lowercase here to preserve user casing preference, but we could
+                          .filter((s, i, self) => s && self.indexOf(s) === i);
+                        updateSkillGroup(skillGroup.id, "items", items);
+                      }}
+                      placeholder="javascript, typescript, python"
                       data-testid={`input-skill-items-${index}`}
                     />
+                    <SkillsSuggester
+                      currentSkills={skillGroup.items}
+                      onAddSkill={(skill) => {
+                        const newItems = [...skillGroup.items, skill];
+                        // Normalize and unique
+                        const uniqueItems = newItems
+                          .map(s => s.trim())
+                          .filter((s, i, self) => s && self.indexOf(s) === i);
+                        updateSkillGroup(skillGroup.id, "items", uniqueItems);
+                      }}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Suggested: java, python, react, node.js, sql, aws, docker
+                    </p>
                   </div>
                 </div>
               </Card>
@@ -766,12 +970,18 @@ export function FormBuilder({ data, onChange }: FormBuilderProps) {
                       <Label>Link</Label>
                       <Input
                         value={cert.link || ""}
-                        onChange={(e) =>
-                          updateCertification(cert.id, "link", e.target.value)
-                        }
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          updateCertification(cert.id, "link", val);
+                          // Simple validation visual cue could be added here or on blur
+                        }}
+                        className={cert.link && !cert.link.startsWith('http') ? "border-red-500" : ""}
                         placeholder="https://..."
                         data-testid={`input-cert-link-${index}`}
                       />
+                      {cert.link && !cert.link.startsWith('http') && (
+                        <p className="text-xs text-red-500 mt-1">URL must start with http:// or https://</p>
+                      )}
                     </div>
                   </div>
                 </div>
